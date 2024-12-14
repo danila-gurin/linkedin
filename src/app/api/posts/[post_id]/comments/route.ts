@@ -15,7 +15,10 @@ export async function GET(
     await connectDB(); // connect to the DB
     const post = await Post.findById(params.post_id);
     if (!post) {
-      return NextResponse.json({ error: 'Post not found' }, { status: 404 });
+      return NextResponse.json(
+        { error: 'comments not found' },
+        { status: 404 }
+      );
     }
     const comments = await post.getAllComments();
     return NextResponse.json(comments);
