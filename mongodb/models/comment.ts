@@ -1,5 +1,5 @@
-import { IUser } from '../../types/User';
 import mongoose, { Schema, Document, models, Model } from 'mongoose';
+import { IUser } from '../../src/types/User';
 
 export interface ICommentBase {
   user: IUser;
@@ -11,7 +11,7 @@ export interface IComment extends Document, ICommentBase {
   updatedAt: Date;
 }
 
-const commentSchema = new Schema<IComment>(
+const CommentSchema = new Schema<IComment>(
   {
     user: {
       userId: { type: String, required: true },
@@ -25,5 +25,4 @@ const commentSchema = new Schema<IComment>(
 );
 
 export const Comment =
-  (models.Comment as Model<IComment>) ||
-  mongoose.model('Comment', commentSchema);
+  models.Comment || mongoose.model<IComment>('Comment', CommentSchema);
