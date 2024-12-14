@@ -1,12 +1,24 @@
 'use server';
-
 import { currentUser } from '@clerk/nextjs/server';
 import { Post } from '../mongodb/models/post';
-import { AddPostRequestBody } from '@/app/api/posts/route';
-import { IUser } from '../src/types/User';
 import axios from 'axios';
 import { randomUUID } from 'crypto';
 import { Buffer } from 'buffer';
+import { revalidatePath } from 'next/cache';
+
+// Verify required environment variables
+const requiredEnvVars = [
+  'B2_APPLICATION_KEY_ID',
+  'B2_APPLICATION_KEY',
+  'B2_BUCKET_NAME',
+  'B2_BUCKET_ID',
+];
+
+for (const envVar of requiredEnvVars) {
+  if (!process.env[envVar]) {
+    throw new Error(`Missing required environment variable: ${envVar}`);
+  }
+}
 
 const getB2Auth = async () => {
   try {
@@ -20,8 +32,7 @@ const getB2Auth = async () => {
       }
     );
 
-    // Verify bucket access
-    if (!authResponse.data.allowed.capabilities.includes('writeFiles')) {
+    if (!authResponse.data.allowed?.capabilities?.includes('writeFiles')) {
       throw new Error('Application key lacks writeFiles permission');
     }
 
@@ -49,9 +60,10 @@ const getUploadUrl = async (
     );
     return response.data;
   } catch (error: any) {
-    if (error.response?.status === 404) {
-      throw new Error(`Bucket ID ${bucketId} not found or not accessible`);
-    }
+    console.error(
+      'Failed to get upload URL:',
+      error.response?.data || error.message
+    );
     throw new Error('Failed to get upload URL');
   }
 };
@@ -59,15 +71,12 @@ const getUploadUrl = async (
 const uploadImageToB2 = async (image: File): Promise<string> => {
   try {
     const auth = await getB2Auth();
-
-    // Get upload URL
     const uploadUrl = await getUploadUrl(
       auth.apiUrl,
       auth.authorizationToken,
       process.env.B2_BUCKET_ID!
     );
 
-    // Prepare file
     const arrayBuffer = await image.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
     const fileName = `${randomUUID()}_${Date.now()}.png`;
@@ -76,20 +85,27 @@ const uploadImageToB2 = async (image: File): Promise<string> => {
       .update(buffer)
       .digest('hex');
 
-    // Upload file
+    // Upload file with proper error handling
     const uploadResponse = await axios.post(uploadUrl.uploadUrl, buffer, {
       headers: {
         Authorization: uploadUrl.authorizationToken,
-        'X-Bz-File-Name': encodeURIComponent(fileName),
+        'X-Bz-File-Name': fileName, // Remove encodeURIComponent
         'Content-Type': 'image/png',
         'X-Bz-Content-Sha1': sha1,
+        'Content-Length': buffer.length.toString(),
       },
     });
 
-    return `${auth.downloadUrl}/file/${process.env.B2_BUCKET_NAME}/${fileName}`;
-  } catch (error) {
-    console.error('Image upload failed:', error);
-    throw error;
+    // Construct the correct download URL
+    const downloadUrl = `${auth.downloadUrl}/file/${process.env.B2_BUCKET_NAME}/${fileName}`;
+    console.log('Image uploaded successfully:', downloadUrl);
+    return downloadUrl;
+  } catch (error: any) {
+    console.error(
+      'Image upload failed:',
+      error.response?.data || error.message
+    );
+    throw new Error('Failed to upload image to B2');
   }
 };
 
@@ -106,15 +122,14 @@ export default async function createPostAction(formData: FormData) {
     }
 
     const image = formData.get('image') as File;
-
-    const userDB: IUser = {
+    const userDB = {
       userId: user.id,
       userImage: user.imageUrl,
       firstName: user.firstName || '',
       lastName: user.lastName || '',
     };
 
-    let postBody: AddPostRequestBody = {
+    const postBody: any = {
       user: userDB,
       text: postInput,
     };
@@ -125,9 +140,10 @@ export default async function createPostAction(formData: FormData) {
     }
 
     const post = await Post.create(postBody);
+    revalidatePath('/');
     return post;
-  } catch (error) {
-    console.error('Create post failed:', error);
+  } catch (error: any) {
+    console.error('Create post failed:', error.message);
     throw error;
   }
 }

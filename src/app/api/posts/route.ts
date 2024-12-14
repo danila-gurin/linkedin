@@ -13,10 +13,10 @@ export interface AddPostRequestBody {
 }
 
 export async function POST(request: Request) {
-  // const { userId } = await auth();
-  // if (!userId) {
-  //   redirect('/');
-  // }
+  const { userId } = await auth();
+  if (!userId) {
+    redirect('/');
+  }
   await connectDB();
 
   try {

@@ -15,9 +15,9 @@ export async function POST(
   await connectDB(); // connect to the DB
   const { userId } = await auth();
 
-  // if (!userId) {
-  //   redirect('/');
-  // }
+  if (!userId) {
+    redirect('/');
+  }
 
   const { userIdTwo }: UnlikePostRequestBody = await request.json();
   try {

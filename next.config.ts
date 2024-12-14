@@ -13,7 +13,7 @@ const nextConfig: NextConfig = {
       },
       {
         protocol: 'https',
-        hostname: 'Linkedinclone.blob.core.windows.net',
+        hostname: 'f005.backblazeb2.com',
       },
     ],
   },
